@@ -11,9 +11,9 @@ from colorama import Fore
 from socks import SOCKS5
 from sys import stdout
 
-api_id = '25520998'
-api_hash = '741ff17f87e64b4f46137b4855772ccf'
-phone_number = '+33661851939'
+api_id = ''
+api_hash = ''
+phone_number = ''
 
 #-
 
