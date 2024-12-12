@@ -1,31 +1,13 @@
-import os
-import json
-import time
-import ctypes
 import random
-from telethon import TelegramClient
-from telethon.tl.functions.channels import GetParticipantsRequest
-from telethon.tl.types import ChannelParticipantsSearch, Channel, Chat
-from telethon.errors import ChatAdminRequiredError
-from colorama import Fore
-from socks import SOCKS5
-from sys import stdout
+import requests
+import concurrent.futures
+from bs4 import BeautifulSoup
+from colorama import Fore, init
 
-api_id = ''
-api_hash = ''
-phone_number = ''
-
-#-
-
-b = Fore.WHITE
-v = Fore.GREEN
-r = Fore.RESET
-
-nombre = 0
-groupes = 0
-numeros = 0
-
-proxies = [
+INPUT_FILE = "groupes.txt"
+OUTPUT_FILE = "groupes_100+.txt"
+        
+liste_proxies = [
     "be-bru-wg-socks5-103.relays.mullvad.net:1080",
     "be-bru-wg-socks5-101.relays.mullvad.net:1080",
     "fr-par-wg-socks5-004.relays.mullvad.net:1080",
@@ -172,87 +154,49 @@ proxies = [
     "ro-buh-wg-socks5-001.relays.mullvad.net:1080",
 ]
 
-selected_proxy = random.choice(proxies)
-proxy_addr, proxy_port = selected_proxy.split(':')
-proxy_type = 'socks5'
-client = TelegramClient('session_name', api_id, api_hash, proxy=(proxy_type, proxy_addr, int(proxy_port)))
+def obtenir_proxy():
+    proxy = random.choice(liste_proxies)
+    return {
+        "http": f"socks5://{proxy}",
+        "https": f"socks5://{proxy}"
+    }
 
-async def main():
-    global nombre, groupes, numeros
-    await client.start(phone=phone_number)
+headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"}
 
-    with open('groupes.txt', 'r', encoding='utf-8') as file:
-        group_names = [line.strip() for line in file.readlines()]
+def annuaire(groupe):
+    tentatives = 0
+    max_tentatives = 5
+    succes = False
 
-    for group_name in group_names:
-        groupes += 1
-        print(f"\n{r}----------------------------------------------------------------------")
-        print(f"{Fore.BLUE}Groupe : {r}{group_name}")
-
+    while not succes and tentatives < max_tentatives:
         try:
-            group = await client.get_entity(group_name)
+            tentatives += 1
+            proxy = obtenir_proxy()
+            tentatives += 1
+            proxy = obtenir_proxy()
+            requete = requests.get(f"https://t.me/{groupe}", headers=headers, proxies=proxy, timeout=5)
+            requete.raise_for_status()
+                
+            soup = BeautifulSoup(requete.text, "html.parser")
 
-            if not isinstance(group, (Channel, Chat)):
-                print(f"{Fore.RED}[!] Type de groupe inconnu. Ignoré.{r}")
-                continue
+            membres__ = soup.find("div", class_="tgme_page_extra")
+            membres_ = membres__.get_text(strip=True)
+            membres = membres_.split(' members')[0].replace(' ', '')
+            en_ligne = membres_.split(' members, ')[1].split(' online')[0]
 
-            users_data = []
-            offset = 0
-            limit = 200
+            print(f"{Fore.GREEN}Groupe : {Fore.RESET}{groupe} {Fore.BLUE}| {Fore.GREEN}Membres : {Fore.RESET}{membres} {Fore.BLUE}| {Fore.GREEN}En ligne : {Fore.RESET}{en_ligne}")
 
-            while True:
-                participants = await client(GetParticipantsRequest(
-                    group,
-                    ChannelParticipantsSearch(''),
-                    offset=offset,
-                    limit=limit,
-                    hash=0
-                ))
+            with open(OUTPUT_FILE, "a") as ff:
+                ff.write(f"{groupe}\n")
 
-                users = getattr(participants, 'users', getattr(participants, 'participants', []))
-                if not users:
-                    break
+            succes = True
+        except:
+            pass
+            if tentatives >= max_tentatives:
+                pass
 
-                for user in users:
-                    users_data.append({
-                        "id": user.id,
-                        "username": user.username or "N/A",
-                        "phone": user.phone or "N/A",
-                        "first_name": user.first_name or "N/A",
-                        "last_name": user.last_name or "N/A",
-                        "bio": user.bot_info_version or "N/A",
-                        "status": str(user.status) or "N/A",
-                        "lang_code": user.lang_code or "N/A"
-                    })
+with open(INPUT_FILE, "r") as f:
+    lignes = f.read().splitlines()
 
-                    print(f"{v}[{b}ID : {user.id}{v}] {b}> {v}[{b}Pseudo : {user.username or 'N/A'}{v}] {b}> {v}[{b}Numéro : {user.phone or 'N/A'}{v}]{r}")
-
-                    if not user.phone:
-                        pass
-                    else:
-                        numeros += 1
-
-                    nombre += 1
-
-                offset += limit
-
-            filename = f"data/{group_name.replace(' ', '_').replace('/', '_')}.json"
-            os.makedirs("data", exist_ok=True)
-            with open(filename, 'w', encoding='utf-8') as f:
-                for user in users_data:
-                    json.dump(user, f, ensure_ascii=False)
-                    f.write(',\n')
-
-            print(f"\n{v}[+] Données sauvegardées dans -> {r}{filename}")
-            print(f"{Fore.CYAN}[i] Total des membres : {r}{len(users_data)}")
-            ctypes.windll.kernel32.SetConsoleTitleW(f"Groupes : {groupes} | Utilisateurs : {nombre} | Numéros : {numeros}")
-
-        except ChatAdminRequiredError:
-            print(f"{Fore.YELLOW}[!] Pas de privilèges : {r}{group_name}")
-        except Exception as e:
-            print(f"{Fore.RED}[-] Erreur ({group_name}) : {r}{e}")
-
-        time.sleep(1)
-
-with client:
-    client.loop.run_until_complete(main())
+with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+    executor.map(annuaire, lignes)
