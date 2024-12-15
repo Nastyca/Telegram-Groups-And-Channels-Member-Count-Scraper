@@ -163,12 +163,12 @@ def obtenir_proxy():
 
 headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"}
 
-def annuaire(groupe):
+def telegram(groupe):
     tentatives = 0
-    max_tentatives = 5
+    max = 5
     succes = False
 
-    while not succes and tentatives < max_tentatives:
+    while not succes and tentatives < max:
         try:
             tentatives += 1
             proxy = obtenir_proxy()
@@ -192,11 +192,11 @@ def annuaire(groupe):
             succes = True
         except:
             pass
-            if tentatives >= max_tentatives:
+            if tentatives >= max:
                 pass
 
 with open(INPUT_FILE, "r") as f:
     lignes = f.read().splitlines()
 
 with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-    executor.map(annuaire, lignes)
+    executor.map(telegram, lignes)
